@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>미디어 검수 도구</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; }
+
+.header { background: #16213e; padding: 20px 30px; border-bottom: 2px solid #0f3460; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 22px; color: #e94560; }
+.header-buttons { display: flex; gap: 10px; }
+
+.btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+.btn-primary { background: #e94560; color: white; }
+.btn-primary:hover { background: #c73652; }
+.btn-secondary { background: #0f3460; color: white; }
+.btn-secondary:hover { background: #1a4a8a; }
+.btn-success { background: #2ecc71; color: white; }
+.btn-success:hover { background: #27ae60; }
+.btn-small { padding: 6px 12px; font-size: 12px; }
+
+.upload-area { display: flex; justify-content: center; align-items: center; padding: 60px; }
+.upload-box { border: 3px dashed #0f3460; border-radius: 16px; padding: 60px; text-align: center; cursor: pointer; transition: all 0.3s; max-width: 600px; width: 100%; }
+.upload-box:hover { border-color: #e94560; background: rgba(233,69,96,0.05); }
+.upload-box h2 { margin-bottom: 12px; color: #e94560; }
+.upload-box p { color: #888; margin-bottom: 8px; }
+
+.main-container { display: none; height: calc(100vh - 70px); }
+
+.sidebar { width: 280px; background: #16213e; border-right: 2px solid #0f3460; overflow-y: auto; position: fixed; top: 70px; left: 0; bottom: 0; }
+
+.content-area { margin-left: 280px; padding: 20px; overflow-y: auto; height: 100%; }
+
+.folder-group { margin-bottom: 6px; }
+.folder-title { padding: 12px 16px; background: #0f3460; font-weight: 700; font-size: 14px; color: #e94560; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.folder-title:hover { background: #1a4a8a; }
+.folder-title .count { font-size: 12px; color: #888; font-weight: 400; }
+.folder-title .arrow { transition: transform 0.2s; }
+.folder-title.collapsed .arrow { transform: rotate(-90deg); }
+
+.file-list { }
+.file-list.hidden { display: none; }
+
+.file-item { padding: 10px 16px; border-bottom: 1px solid #0f3460; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.15s; font-size: 13px; }
+.file-item:hover { background: rgba(233,69,96,0.1); }
+.file-item.active { background: rgba(233,69,96,0.2); border-left: 3px solid #e94560; }
+.file-item .icon { font-size: 18px; flex-shrink: 0; }
+.file-item .name { flex: 1; word-break: break-all; }
+.file-item .status { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.file-item .status.unchecked { background: #555; }
+.file-item .status.pass { background: #2ecc71; }
+.file-item .status.fail { background: #e74c3c; }
+.file-item .status.done { background: #3498db; }
+
+.player-section { margin-bottom: 24px; }
+.player-section h3 { margin-bottom: 12px; color: #e94560; font-size: 16px; }
+.player-section video, .player-section audio { width: 100%; border-radius: 8px; background: #000; }
+.player-section video { max-height: 75vh; }
+
+.checklist-section { background: #16213e; padding: 20px; border-radius: 8px; margin-bottom: 24px; max-width: 900px; }
+.checklist-section h3 { margin-bottom: 16px; color: #e94560; }
+
+.radio-group { display: flex; gap: 20px; align-items: center; margin-bottom: 12px; }
+.radio-group label { cursor: pointer; font-size: 15px; user-select: none; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.radio-group input[type="radio"] { accent-color: #e94560; width: 18px; height: 18px; cursor: pointer; }
+.reason-input { width: 100%; background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-family: inherit; margin-top: 8px; display: none; }
+.reason-input.show { display: block; }
+.reason-input::placeholder { color: #555; }
+
+.result-buttons { display: flex; gap: 10px; margin-top: 16px; }
+.result-buttons .btn { flex: 1; padding: 12px; font-size: 15px; }
+
+.no-selection { display: flex; justify-content: center; align-items: center; height: 60vh; color: #555; font-size: 18px; }
+
+.progress-bar { padding: 12px 16px; background: #0a0a1a; border-bottom: 1px solid #0f3460; font-size: 13px; }
+.progress-bar .bar-bg { background: #0f3460; border-radius: 4px; height: 8px; margin-top: 6px; overflow: hidden; }
+.progress-bar .bar-fill { background: linear-gradient(90deg, #e94560, #2ecc71); height: 100%; transition: width 0.3s; border-radius: 4px; }
+
+.summary-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+.summary-overlay.show { display: flex; }
+.summary-box { background: #16213e; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+.summary-box h2 { color: #e94560; margin-bottom: 20px; }
+.summary-box pre { background: #1a1a2e; padding: 16px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; margin-bottom: 20px; }
+.summary-box .btn-row { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Upload Screen -->
+<div id="uploadScreen">
+  <div class="header">
+    <h1>미디어 검수 도구</h1>
+  </div>
+  <div class="upload-area">
+    <div class="upload-box" id="uploadBox">
+      <h2>상위 폴더를 선택하세요</h2>
+      <p>상위폴더 / 하위폴더1,2,3... 구조의 폴더를 선택하면</p>
+      <p>각 하위폴더의 MP4, MP3 파일이 자동으로 로드됩니다.</p>
+      <br>
+      <button class="btn btn-primary" onclick="document.getElementById('folderInput').click()">폴더 선택</button>
+      <input type="file" id="folderInput" webkitdirectory multiple hidden>
+    </div>
+  </div>
+</div>
+
+<!-- Main Screen -->
+<div class="main-container" id="mainScreen">
+  <div class="header">
+    <h1>미디어 검수 도구</h1>
+    <div class="header-buttons">
+      <button class="btn btn-secondary" onclick="document.getElementById('folderInput2').click()">다른 폴더 열기</button>
+      <input type="file" id="folderInput2" webkitdirectory multiple hidden>
+      <button class="btn btn-success" onclick="showSummary()">검수 결과 내보내기</button>
+    </div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="progress-bar" id="progressBar">
+      <span id="progressText">검수 진행: 0 / 0</span>
+      <div class="bar-bg"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div id="fileTree"></div>
+  </div>
+
+  <div class="content-area" id="contentArea">
+    <div class="no-selection" id="noSelection">좌측 목록에서 파일을 선택하세요</div>
+    <div id="playerContent" style="display:none">
+      <div class="player-section" id="playerSection"></div>
+      <div class="checklist-section" id="checklistSection">
+        <h3>검수 체크리스트</h3>
+        <div id="checklistContent"></div>
+        <div class="result-buttons">
+          <button class="btn btn-primary" onclick="goNext()">다음</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Overlay -->
+<div class="summary-overlay" id="summaryOverlay">
+  <div class="summary-box">
+    <h2>검수 결과 요약</h2>
+    <pre id="summaryContent"></pre>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="downloadResult()">텍스트 파일 다운로드</button>
+      <button class="btn btn-secondary" onclick="closeSummary()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allFiles = [];
+let fileResults = {};
+let currentFileKey = null;
+let currentObjectURL = null;
+
+function init() {
+  document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
+  document.getElementById('folderInput2').addEventListener('change', handleFolderSelect);
+}
+
+function handleFolderSelect(e) {
+  const files = Array.from(e.target.files);
+  const mediaFiles = files.filter(f => /\.(mp4|mp3)$/i.test(f.name));
+
+  if (mediaFiles.length === 0) {
+    alert('MP4 또는 MP3 파일을 찾을 수 없습니다.');
+    return;
+  }
+
+  allFiles = [];
+  fileResults = {};
+  currentFileKey = null;
+
+  const folders = {};
+  mediaFiles.forEach(f => {
+    const parts = f.webkitRelativePath.split('/');
+    const folder = parts.length > 2 ? parts.slice(1, -1).join('/') : (parts.length > 1 ? parts[0] : '루트');
+    if (!folders[folder]) folders[folder] = [];
+    const key = f.webkitRelativePath || f.name;
+    folders[folder].push({ file: f, key, name: f.name, folder, type: f.name.toLowerCase().endsWith('.mp4') ? 'video' : 'audio' });
+  });
+
+  const sortedFolderKeys = Object.keys(folders).sort();
+  allFiles = [];
+  sortedFolderKeys.forEach(folder => {
+    folders[folder].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'video' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    folders[folder].forEach(item => allFiles.push(item));
+  });
+
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'block';
+  renderFileTree(folders);
+  updateProgress();
+}
+
+function renderFileTree(folders) {
+  const tree = document.getElementById('fileTree');
+  tree.innerHTML = '';
+  const sortedFolders = Object.keys(folders).sort();
+
+  sortedFolders.forEach(folder => {
+    const group = document.createElement('div');
+    group.className = 'folder-group';
+
+    const items = folders[folder];
+
+    const title = document.createElement('div');
+    title.className = 'folder-title';
+    title.innerHTML = `<span><span class="arrow">&#9660;</span> ${folder}</span><span class="count">${items.length}개</span>`;
+    title.onclick = () => {
+      title.classList.toggle('collapsed');
+      list.classList.toggle('hidden');
+    };
+    group.appendChild(title);
+
+    const list = document.createElement('div');
+    list.className = 'file-list';
+    list.id = 'list-' + folder.replace(/[^a-zA-Z0-9]/g, '_');
+
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'file-item';
+      div.id = 'item-' + CSS.escape(item.key);
+      div.setAttribute('data-key', item.key);
+      div.innerHTML = `
+        <span class="icon">${item.type === 'video' ? '🎬' : '🎵'}</span>
+        <span class="name">${item.name}</span>
+        <span class="status unchecked" id="status-${CSS.escape(item.key)}"></span>
+      `;
+      div.onclick = () => selectFile(item.key);
+      list.appendChild(div);
+    });
+
+    group.appendChild(list);
+    tree.appendChild(group);
+  });
+}
+
+function selectFile(key) {
+  if (currentFileKey) saveCurrentState();
+
+  currentFileKey = key;
+  const item = allFiles.find(f => f.key === key);
+  if (!item) return;
+
+  document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.file-item[data-key="${CSS.escape(key)}"]`);
+  if (el) el.classList.add('active');
+
+  document.getElementById('noSelection').style.display = 'none';
+  document.getElementById('playerContent').style.display = 'block';
+
+  const playerSection = document.getElementById('playerSection');
+  if (currentObjectURL) {
+    URL.revokeObjectURL(currentObjectURL);
+    currentObjectURL = null;
+  }
+  const url = URL.createObjectURL(item.file);
+  currentObjectURL = url;
+
+  if (item.type === 'video') {
+    playerSection.innerHTML = `<h3>🎬 ${item.name}</h3><video controls src="${url}"></video>`;
+  } else {
+    playerSection.innerHTML = `<h3>🎵 ${item.name}</h3><audio controls src="${url}"></audio>`;
+  }
+
+  const saved = fileResults[key] || {};
+  const checklistContent = document.getElementById('checklistContent');
+  const savedStatus = saved.status || '';
+
+  const watermarkHtml = item.type === 'video'
+    ? `<div class="radio-group" style="margin-top:10px; font-size:13px; color:#ccc;">
+        <span style="margin-right:8px;">Veo 워터마크:</span>
+        <label style="color:#e74c3c;"><input type="radio" name="watermark" value="있음" ${saved.watermark === '있음' ? 'checked' : ''}> 있음</label>
+        <label><input type="radio" name="watermark" value="없음" ${saved.watermark === '없음' ? 'checked' : ''}> 없음</label>
+      </div>` : '';
+
+  checklistContent.innerHTML = `
+    ${watermarkHtml}
+    <div class="radio-group">
+      <label><input type="radio" name="fileStatus" value="정상" ${savedStatus === '정상' ? 'checked' : ''}> 정상</label>
+      <label><input type="radio" name="fileStatus" value="비정상" ${savedStatus === '비정상' ? 'checked' : ''}> 비정상</label>
+    </div>
+    <input type="text" class="reason-input ${savedStatus === '비정상' ? 'show' : ''}" id="reasonInput" placeholder="비정상 사유를 입력하세요" value="${saved.reason || ''}">
+  `;
+
+  checklistContent.querySelectorAll('input[name="fileStatus"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('reasonInput').classList.toggle('show', r.value === '비정상' && r.checked);
+    });
+  });
+}
+
+function saveCurrentState() {
+  if (!currentFileKey) return;
+  const statusRadio = document.querySelector('#checklistContent input[name="fileStatus"]:checked');
+  const status = statusRadio ? statusRadio.value : '';
+  const reason = document.getElementById('reasonInput').value.trim();
+
+  const watermarkRadio = document.querySelector('#checklistContent input[name="watermark"]:checked');
+  if (!fileResults[currentFileKey]) fileResults[currentFileKey] = {};
+  fileResults[currentFileKey].status = status;
+  fileResults[currentFileKey].reason = reason;
+  if (watermarkRadio) fileResults[currentFileKey].watermark = watermarkRadio.value;
+}
+
+function goNext() {
+  if (!currentFileKey) return;
+  saveCurrentState();
+
+  const r = fileResults[currentFileKey] || {};
+  if (!r.status) {
+    alert('정상 또는 비정상을 선택해주세요.');
+    return;
+  }
+  if (r.status === '비정상' && !r.reason) {
+    alert('비정상 사유를 입력해주세요.');
+    document.getElementById('reasonInput').focus();
+    return;
+  }
+
+  r.timestamp = new Date().toLocaleString('ko-KR');
+  let result = r.status === '비정상' ? 'fail' : 'pass';
+  r.result = result;
+  fileResults[currentFileKey] = r;
+
+  const statusEl = document.querySelector(`.file-item[data-key="${CSS.escape(currentFileKey)}"] .status`);
+  if (statusEl) {
+    statusEl.className = 'status ' + result;
+  }
+  updateProgress();
+
+  // Move to the next file in order
+  const currentIdx = allFiles.findIndex(f => f.key === currentFileKey);
+  const nextIdx = currentIdx + 1;
+  if (nextIdx < allFiles.length) {
+    const nextKey = allFiles[nextIdx].key;
+    selectFile(nextKey);
+    const el = document.querySelector(`.file-item[data-key="${CSS.escape(nextKey)}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    const total = allFiles.length;
+    const done = Object.values(fileResults).filter(r => r.result).length;
+    if (done >= total) {
+      if (confirm('모든 파일 검수가 완료되었습니다. 결과를 내보내시겠습니까?')) {
+        showSummary();
+      }
+    } else {
+      alert('마지막 파일입니다. 미검수 항목을 확인해주세요.');
+    }
+  }
+}
+
+function updateProgress() {
+  const total = allFiles.length;
+  const done = Object.values(fileResults).filter(r => r.result).length;
+  document.getElementById('progressText').textContent = `검수 진행: ${done} / ${total}`;
+  document.getElementById('progressFill').style.width = total > 0 ? (done / total * 100) + '%' : '0%';
+}
+
+function generateResultText() {
+  saveCurrentState();
+  const now = new Date().toLocaleString('ko-KR');
+  let text = `========================================\n`;
+  text += `  미디어 검수 결과 보고서\n`;
+  text += `  생성일시: ${now}\n`;
+  text += `========================================\n\n`;
+
+  const total = allFiles.length;
+  const passed = Object.values(fileResults).filter(r => r.result === 'pass').length;
+  const failed = Object.values(fileResults).filter(r => r.result === 'fail').length;
+  const unchecked = total - passed - failed;
+
+  text += `[요약]\n`;
+  text += `  전체: ${total}개  |  통과: ${passed}개  |  불합격: ${failed}개  |  미검수: ${unchecked}개\n\n`;
+  text += `========================================\n\n`;
+
+  // 비정상만 출력
+  const failItems = allFiles.filter(f => {
+    const r = fileResults[f.key];
+    return r && r.result === 'fail';
+  });
+
+  failItems.forEach(item => {
+    const r = fileResults[item.key];
+    text += `  ${item.folder}  |  ${item.name}`;
+    if (r.reason) text += `  |  사유: ${r.reason}`;
+    text += `\n`;
+  });
+
+  if (failItems.length === 0) {
+    text += `  비정상 항목 없음\n`;
+  }
+
+  return text;
+}
+
+function showSummary() {
+  document.getElementById('summaryContent').textContent = generateResultText();
+  document.getElementById('summaryOverlay').classList.add('show');
+}
+
+function closeSummary() {
+  document.getElementById('summaryOverlay').classList.remove('show');
+}
+
+function downloadResult() {
+  const text = generateResultText();
+  const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `검수결과_${dateStr}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+init();
+</script>
+</body>
+</html>
