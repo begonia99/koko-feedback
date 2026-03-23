@@ -155,6 +155,7 @@ let allFiles = [];
 let fileResults = {};
 let currentFileKey = null;
 let currentObjectURL = null;
+let rootFolderName = '';
 
 function init() {
   document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
@@ -175,6 +176,8 @@ function handleFolderSelect(e) {
   currentFileKey = null;
 
   const folders = {};
+  const firstPath = mediaFiles[0].webkitRelativePath;
+  rootFolderName = firstPath ? firstPath.split('/')[0] : '미디어';
   mediaFiles.forEach(f => {
     const parts = f.webkitRelativePath.split('/');
     const folder = parts.length > 2 ? parts.slice(1, -1).join('/') : (parts.length > 1 ? parts[0] : '루트');
@@ -368,17 +371,10 @@ function generateResultText() {
   saveCurrentState();
   const now = new Date().toLocaleString('ko-KR');
   let text = `========================================\n`;
-  text += `  미디어 검수 결과 보고서\n`;
+  text += `  ${rootFolderName} 검수 결과 보고서\n`;
   text += `  생성일시: ${now}\n`;
   text += `========================================\n\n`;
 
-  const total = allFiles.length;
-  const passed = Object.values(fileResults).filter(r => r.result === 'pass').length;
-  const failed = Object.values(fileResults).filter(r => r.result === 'fail').length;
-  const unchecked = total - passed - failed;
-
-  text += `[요약]\n`;
-  text += `  전체: ${total}개  |  통과: ${passed}개  |  불합격: ${failed}개  |  미검수: ${unchecked}개\n\n`;
   text += `========================================\n\n`;
 
   // 비정상만 출력
