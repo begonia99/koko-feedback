@@ -30,7 +30,9 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
 
 .sidebar { width: 280px; background: #16213e; border-right: 2px solid #0f3460; overflow-y: auto; position: fixed; top: 70px; left: 0; bottom: 0; }
 
-.content-area { margin-left: 280px; padding: 20px; overflow-y: auto; height: 100%; }
+.content-area { margin-left: 280px; margin-right: 280px; padding: 20px; overflow-y: auto; height: 100%; }
+
+.right-panel { width: 280px; background: #16213e; border-left: 2px solid #0f3460; position: fixed; top: 70px; right: 0; bottom: 0; overflow-y: auto; padding: 20px; display: none; }
 
 .folder-group { margin-bottom: 6px; }
 .folder-title { padding: 12px 16px; background: #0f3460; font-weight: 700; font-size: 14px; color: #e94560; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
@@ -58,18 +60,22 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
 .player-section video, .player-section audio { width: 100%; border-radius: 8px; background: #000; }
 .player-section video { max-height: 75vh; }
 
-.checklist-section { background: #16213e; padding: 20px; border-radius: 8px; margin-bottom: 24px; max-width: 900px; }
+.frame-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.frame-controls .btn { padding: 6px 14px; font-size: 13px; }
+.frame-controls .time-display { font-size: 13px; color: #aaa; font-family: monospace; }
+
+.checklist-section { margin-bottom: 24px; }
 .checklist-section h3 { margin-bottom: 16px; color: #e94560; }
 
 .radio-group { display: flex; gap: 20px; align-items: center; margin-bottom: 12px; }
 .radio-group label { cursor: pointer; font-size: 15px; user-select: none; display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .radio-group input[type="radio"] { accent-color: #e94560; width: 18px; height: 18px; cursor: pointer; }
-.reason-input { width: 100%; background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-family: inherit; margin-top: 8px; display: none; }
+.reason-input { width: 100%; background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-family: inherit; margin-top: 8px; display: none; resize: none; overflow: hidden; min-height: 36px; }
 .reason-input.show { display: block; }
 .reason-input::placeholder { color: #555; }
 
-.result-buttons { display: flex; gap: 10px; margin-top: 16px; }
-.result-buttons .btn { flex: 1; padding: 12px; font-size: 15px; }
+.result-buttons { margin-top: 16px; }
+.result-buttons .btn { width: 100%; padding: 12px; font-size: 15px; }
 
 .no-selection { display: flex; justify-content: center; align-items: center; height: 60vh; color: #555; font-size: 18px; }
 
@@ -127,12 +133,15 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
     <div class="no-selection" id="noSelection">좌측 목록에서 파일을 선택하세요</div>
     <div id="playerContent" style="display:none">
       <div class="player-section" id="playerSection"></div>
-      <div class="checklist-section" id="checklistSection">
-        <h3>검수 체크리스트</h3>
-        <div id="checklistContent"></div>
-        <div class="result-buttons">
-          <button class="btn btn-primary" onclick="goNext()">다음</button>
-        </div>
+    </div>
+  </div>
+
+  <div class="right-panel" id="rightPanel">
+    <div class="checklist-section" id="checklistSection">
+      <h3>검수 체크리스트</h3>
+      <div id="checklistContent"></div>
+      <div class="result-buttons">
+        <button class="btn btn-primary" onclick="goNext()">다음</button>
       </div>
     </div>
   </div>
@@ -258,6 +267,7 @@ function selectFile(key) {
 
   document.getElementById('noSelection').style.display = 'none';
   document.getElementById('playerContent').style.display = 'block';
+  document.getElementById('rightPanel').style.display = 'block';
 
   const playerSection = document.getElementById('playerSection');
   if (currentObjectURL) {
@@ -268,7 +278,16 @@ function selectFile(key) {
   currentObjectURL = url;
 
   if (item.type === 'video') {
-    playerSection.innerHTML = `<h3>🎬 ${item.name}</h3><video controls src="${url}"></video>`;
+    playerSection.innerHTML = `<h3>🎬 ${item.name}</h3><video id="videoPlayer" controls src="${url}"></video>
+      <div class="frame-controls">
+        <button class="btn btn-secondary" onclick="stepFrame(-1)">◀ 이전 프레임</button>
+        <button class="btn btn-secondary" onclick="stepFrame(1)">다음 프레임 ▶</button>
+        <span class="time-display" id="timeDisplay">00:00:00.000</span>
+        <span style="color:#555; font-size:12px;">| 일시정지 후 ← → 키로 프레임 이동</span>
+      </div>`;
+    const vid = document.getElementById('videoPlayer');
+    vid.addEventListener('timeupdate', updateTimeDisplay);
+    vid.addEventListener('seeked', updateTimeDisplay);
   } else {
     playerSection.innerHTML = `<h3>🎵 ${item.name}</h3><audio controls src="${url}"></audio>`;
   }
@@ -290,7 +309,7 @@ function selectFile(key) {
       <label><input type="radio" name="fileStatus" value="정상" ${savedStatus === '정상' ? 'checked' : ''}> 정상</label>
       <label><input type="radio" name="fileStatus" value="비정상" ${savedStatus === '비정상' ? 'checked' : ''}> 비정상</label>
     </div>
-    <input type="text" class="reason-input ${savedStatus === '비정상' ? 'show' : ''}" id="reasonInput" placeholder="비정상 사유를 입력하세요" value="${saved.reason || ''}">
+    <textarea class="reason-input ${savedStatus === '비정상' ? 'show' : ''}" id="reasonInput" placeholder="비정상 사유를 입력하세요" rows="1" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'">${saved.reason || ''}</textarea>
   `;
 
   checklistContent.querySelectorAll('input[name="fileStatus"]').forEach(r => {
@@ -418,6 +437,38 @@ function downloadResult() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const FRAME_RATE = 30;
+const FRAME_DURATION = 1 / FRAME_RATE;
+
+function stepFrame(direction) {
+  const vid = document.getElementById('videoPlayer');
+  if (!vid) return;
+  vid.pause();
+  vid.currentTime = Math.max(0, Math.min(vid.duration, vid.currentTime + direction * FRAME_DURATION));
+}
+
+function updateTimeDisplay() {
+  const vid = document.getElementById('videoPlayer');
+  const el = document.getElementById('timeDisplay');
+  if (!vid || !el) return;
+  const t = vid.currentTime;
+  const h = String(Math.floor(t / 3600)).padStart(2, '0');
+  const m = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+  const s = String(Math.floor(t % 60)).padStart(2, '0');
+  const ms = String(Math.floor((t % 1) * 1000)).padStart(3, '0');
+  el.textContent = `${h}:${m}:${s}.${ms}`;
+}
+
+document.addEventListener('keydown', (e) => {
+  const vid = document.getElementById('videoPlayer');
+  if (!vid) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === ' ') { e.preventDefault(); vid.paused ? vid.play() : vid.pause(); return; }
+  if (!vid.paused) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); stepFrame(-1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); stepFrame(1); }
+});
 
 init();
 </script>
