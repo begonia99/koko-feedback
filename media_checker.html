@@ -53,7 +53,6 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
 .file-item .status.unchecked { background: #555; }
 .file-item .status.pass { background: #2ecc71; }
 .file-item .status.fail { background: #e74c3c; }
-.file-item .status.done { background: #3498db; }
 
 .player-section { margin-bottom: 24px; }
 .player-section h3 { margin-bottom: 12px; color: #e94560; font-size: 16px; }
@@ -141,6 +140,7 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
       <h3>검수 체크리스트</h3>
       <div id="checklistContent"></div>
       <div class="result-buttons">
+        <button class="btn btn-secondary" id="saveBtn" onclick="saveAndStay()" style="display:none; margin-bottom:8px;">저장</button>
         <button class="btn btn-primary" onclick="goNext()">다음</button>
       </div>
     </div>
@@ -180,9 +180,11 @@ function handleFolderSelect(e) {
     return;
   }
 
-  allFiles = [];
   fileResults = {};
   currentFileKey = null;
+  document.getElementById('rightPanel').style.display = 'none';
+  document.getElementById('checklistContent').innerHTML = '';
+  e.target.value = '';
 
   const folders = {};
   const firstPath = mediaFiles[0].webkitRelativePath;
@@ -317,6 +319,9 @@ function selectFile(key) {
       document.getElementById('reasonInput').classList.toggle('show', r.value === '비정상' && r.checked);
     });
   });
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.style.display = (saved.result) ? 'block' : 'none';
 }
 
 function saveCurrentState() {
@@ -330,6 +335,21 @@ function saveCurrentState() {
   fileResults[currentFileKey].status = status;
   fileResults[currentFileKey].reason = reason;
   if (watermarkRadio) fileResults[currentFileKey].watermark = watermarkRadio.value;
+}
+
+function saveAndStay() {
+  if (!currentFileKey) return;
+  saveCurrentState();
+  const r = fileResults[currentFileKey] || {};
+  if (!r.status) { alert('정상 또는 비정상을 선택해주세요.'); return; }
+  if (r.status === '비정상' && !r.reason) { alert('비정상 사유를 입력해주세요.'); document.getElementById('reasonInput').focus(); return; }
+  r.timestamp = new Date().toLocaleString('ko-KR');
+  r.result = r.status === '비정상' ? 'fail' : 'pass';
+  fileResults[currentFileKey] = r;
+  const statusEl = document.querySelector(`.file-item[data-key="${CSS.escape(currentFileKey)}"] .status`);
+  if (statusEl) statusEl.className = 'status ' + r.result;
+  updateProgress();
+  alert('저장되었습니다.');
 }
 
 function goNext() {
@@ -392,8 +412,6 @@ function generateResultText() {
   let text = `========================================\n`;
   text += `  ${rootFolderName} 검수 결과 보고서\n`;
   text += `  생성일시: ${now}\n`;
-  text += `========================================\n\n`;
-
   text += `========================================\n\n`;
 
   // 비정상만 출력
