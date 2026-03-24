@@ -167,6 +167,48 @@ let currentObjectURL = null;
 let rootFolderName = '';
 let dialogueMap = {};
 
+const STORAGE_KEY_PREFIX = 'mediaChecker_';
+
+function getStorageKey() {
+  return STORAGE_KEY_PREFIX + rootFolderName;
+}
+
+function clearOldResults() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(STORAGE_KEY_PREFIX));
+  keys.forEach(k => localStorage.removeItem(k));
+}
+
+function persistResults() {
+  try {
+    localStorage.setItem(getStorageKey(), JSON.stringify(fileResults));
+  } catch(e) {
+    console.warn('localStorage 저장 실패:', e);
+  }
+}
+
+function loadResults() {
+  try {
+    const data = localStorage.getItem(getStorageKey());
+    if (data) {
+      fileResults = JSON.parse(data);
+      return true;
+    }
+  } catch(e) {
+    console.warn('localStorage 로드 실패:', e);
+  }
+  return false;
+}
+
+function restoreStatusIcons() {
+  Object.keys(fileResults).forEach(key => {
+    const r = fileResults[key];
+    if (r.result) {
+      const statusEl = document.querySelector(`.file-item[data-key="${CSS.escape(key)}"] .status`);
+      if (statusEl) statusEl.className = 'status ' + r.result;
+    }
+  });
+}
+
 function init() {
   document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
   document.getElementById('folderInput2').addEventListener('change', handleFolderSelect);
@@ -194,7 +236,6 @@ async function handleFolderSelect(e) {
     return;
   }
 
-  fileResults = {};
   currentFileKey = null;
   document.getElementById('rightPanel').style.display = 'none';
   document.getElementById('checklistContent').innerHTML = '';
@@ -203,6 +244,11 @@ async function handleFolderSelect(e) {
   const folders = {};
   const firstPath = mediaFiles[0].webkitRelativePath;
   rootFolderName = firstPath ? firstPath.split('/')[0] : '미디어';
+
+  clearOldResults();
+  if (!loadResults()) {
+    fileResults = {};
+  }
   mediaFiles.forEach(f => {
     const parts = f.webkitRelativePath.split('/');
     const folder = parts.length > 2 ? parts.slice(1, -1).join('/') : (parts.length > 1 ? parts[0] : '루트');
@@ -224,6 +270,7 @@ async function handleFolderSelect(e) {
   document.getElementById('uploadScreen').style.display = 'none';
   document.getElementById('mainScreen').style.display = 'block';
   renderFileTree(folders);
+  restoreStatusIcons();
   updateProgress();
 }
 
@@ -371,6 +418,7 @@ function saveCurrentState() {
   fileResults[currentFileKey].status = status;
   fileResults[currentFileKey].reason = reason;
   if (watermarkRadio) fileResults[currentFileKey].watermark = watermarkRadio.value;
+  persistResults();
 }
 
 function saveAndStay() {
@@ -384,6 +432,7 @@ function saveAndStay() {
   fileResults[currentFileKey] = r;
   const statusEl = document.querySelector(`.file-item[data-key="${CSS.escape(currentFileKey)}"] .status`);
   if (statusEl) statusEl.className = 'status ' + r.result;
+  persistResults();
   updateProgress();
   alert('저장되었습니다.');
 }
@@ -412,6 +461,7 @@ function goNext() {
   if (statusEl) {
     statusEl.className = 'status ' + result;
   }
+  persistResults();
   updateProgress();
 
   // Move to the next file in order
