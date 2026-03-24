@@ -82,6 +82,14 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
 .progress-bar .bar-bg { background: #0f3460; border-radius: 4px; height: 8px; margin-top: 6px; overflow: hidden; }
 .progress-bar .bar-fill { background: linear-gradient(90deg, #e94560, #2ecc71); height: 100%; transition: width 0.3s; border-radius: 4px; }
 
+.help-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; justify-content: center; align-items: center; }
+.help-overlay.show { display: flex; }
+.help-box { background: #16213e; border-radius: 12px; padding: 30px; max-width: 420px; width: 90%; }
+.help-box h2 { color: #e94560; margin-bottom: 16px; }
+.help-box table { width: 100%; border-collapse: collapse; }
+.help-box td { padding: 8px 12px; border-bottom: 1px solid #0f3460; font-size: 14px; }
+.help-box td:first-child { color: #e94560; font-weight: 700; font-family: monospace; white-space: nowrap; width: 80px; }
+
 .summary-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
 .summary-overlay.show { display: flex; }
 .summary-box { background: #16213e; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
@@ -143,6 +151,28 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; backgrou
         <button class="btn btn-secondary" id="saveBtn" onclick="saveAndStay()" style="display:none; margin-bottom:8px;">저장</button>
         <button class="btn btn-primary" onclick="goNext()">다음</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Help Overlay -->
+<div class="help-overlay" id="helpOverlay" onclick="this.classList.remove('show')">
+  <div class="help-box" onclick="event.stopPropagation()">
+    <h2>키보드 단축키</h2>
+    <table>
+      <tr><td>Space</td><td>재생 / 일시정지</td></tr>
+      <tr><td>← →</td><td>프레임 이동 (일시정지 중)</td></tr>
+      <tr><td>1</td><td>정상</td></tr>
+      <tr><td>2</td><td>비정상</td></tr>
+      <tr><td>3</td><td>워터마크 있음 (MP4)</td></tr>
+      <tr><td>4</td><td>워터마크 없음 (MP4)</td></tr>
+      <tr><td>N</td><td>다음 파일</td></tr>
+      <tr><td>P</td><td>이전 파일</td></tr>
+      <tr><td>Esc</td><td>입력란에서 포커스 해제</td></tr>
+      <tr><td>?</td><td>이 도움말 표시</td></tr>
+    </table>
+    <div style="text-align:right; margin-top:16px;">
+      <button class="btn btn-secondary" onclick="document.getElementById('helpOverlay').classList.remove('show')">닫기</button>
     </div>
   </div>
 </div>
@@ -421,10 +451,16 @@ function saveCurrentState() {
   persistResults();
 }
 
+function isVideoFile(key) {
+  const item = allFiles.find(f => f.key === key);
+  return item && item.type === 'video';
+}
+
 function saveAndStay() {
   if (!currentFileKey) return;
   saveCurrentState();
   const r = fileResults[currentFileKey] || {};
+  if (isVideoFile(currentFileKey) && !r.watermark) { alert('Veo 워터마크 여부를 선택해주세요.'); return; }
   if (!r.status) { alert('정상 또는 비정상을 선택해주세요.'); return; }
   if (r.status === '비정상' && !r.reason) { alert('비정상 사유를 입력해주세요.'); document.getElementById('reasonInput').focus(); return; }
   r.timestamp = new Date().toLocaleString('ko-KR');
@@ -442,6 +478,10 @@ function goNext() {
   saveCurrentState();
 
   const r = fileResults[currentFileKey] || {};
+  if (isVideoFile(currentFileKey) && !r.watermark) {
+    alert('Veo 워터마크 여부를 선택해주세요.');
+    return;
+  }
   if (!r.status) {
     alert('정상 또는 비정상을 선택해주세요.');
     return;
@@ -564,8 +604,46 @@ function updateTimeDisplay() {
   el.textContent = `${h}:${m}:${s}.${ms}`;
 }
 
+function selectRadio(name, value) {
+  const radio = document.querySelector(`#checklistContent input[name="${name}"][value="${value}"]`);
+  if (radio) {
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+  }
+}
+
+function goPrev() {
+  if (!currentFileKey) return;
+  const currentIdx = allFiles.findIndex(f => f.key === currentFileKey);
+  if (currentIdx > 0) {
+    saveCurrentState();
+    const prevKey = allFiles[currentIdx - 1].key;
+    selectFile(prevKey);
+    const el = document.querySelector(`.file-item[data-key="${CSS.escape(prevKey)}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.key === 'Escape') { e.target.blur(); }
+    return;
+  }
+
+  // 도움말
+  if (e.key === '?') { e.preventDefault(); document.getElementById('helpOverlay').classList.toggle('show'); return; }
+
+  // 검수 단축키 (파일 선택 중일 때)
+  if (currentFileKey) {
+    if (e.key === '1') { e.preventDefault(); selectRadio('fileStatus', '정상'); return; }
+    if (e.key === '2') { e.preventDefault(); selectRadio('fileStatus', '비정상'); document.getElementById('reasonInput').focus(); return; }
+    if (e.key === '3') { e.preventDefault(); selectRadio('watermark', '있음'); return; }
+    if (e.key === '4') { e.preventDefault(); selectRadio('watermark', '없음'); return; }
+    if (e.key === 'n' || e.key === 'N' || e.key === 'ㅜ') { e.preventDefault(); goNext(); return; }
+    if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ') { e.preventDefault(); goPrev(); return; }
+  }
+
+  // 재생/프레임 이동
   const vid = document.getElementById('videoPlayer');
   const aud = document.querySelector('#playerSection audio');
   const media = vid || aud;
