@@ -165,15 +165,29 @@ let fileResults = {};
 let currentFileKey = null;
 let currentObjectURL = null;
 let rootFolderName = '';
+let dialogueMap = {};
 
 function init() {
   document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
   document.getElementById('folderInput2').addEventListener('change', handleFolderSelect);
 }
 
-function handleFolderSelect(e) {
+async function handleFolderSelect(e) {
   const files = Array.from(e.target.files);
   const mediaFiles = files.filter(f => /\.(mp4|mp3)$/i.test(f.name));
+
+  const dialogueFile = files.find(f => f.name === 'dialogue.json');
+  if (dialogueFile) {
+    const text = await dialogueFile.text();
+    try {
+      dialogueMap = JSON.parse(text);
+    } catch(err) {
+      console.warn('dialogue.json 파싱 실패:', err);
+      dialogueMap = {};
+    }
+  } else {
+    dialogueMap = {};
+  }
 
   if (mediaFiles.length === 0) {
     alert('MP4 또는 MP3 파일을 찾을 수 없습니다.');
@@ -256,6 +270,12 @@ function renderFileTree(folders) {
   });
 }
 
+function getDialogue(key) {
+  const parts = key.split('/');
+  const lookupKey = parts.slice(-2).join('/');
+  return dialogueMap[lookupKey] || null;
+}
+
 function selectFile(key) {
   if (currentFileKey) saveCurrentState();
 
@@ -279,19 +299,35 @@ function selectFile(key) {
   const url = URL.createObjectURL(item.file);
   currentObjectURL = url;
 
+  const dialogue = getDialogue(key);
+
   if (item.type === 'video') {
-    playerSection.innerHTML = `<h3>🎬 ${item.name}</h3><video id="videoPlayer" controls src="${url}"></video>
-      <div class="frame-controls">
-        <button class="btn btn-secondary" onclick="stepFrame(-1)">◀ 이전 프레임</button>
-        <button class="btn btn-secondary" onclick="stepFrame(1)">다음 프레임 ▶</button>
-        <span class="time-display" id="timeDisplay">00:00:00.000</span>
-        <span style="color:#555; font-size:12px;">| 일시정지 후 ← → 키로 프레임 이동</span>
+    const dialogueHtml = dialogue ? `<div style="width:200px; flex-shrink:0; background:#0f3460; border-radius:10px; padding:16px; border-left:3px solid #e94560; align-self:center; word-break:keep-all;">
+        <strong style="color:#e94560; font-size:12px; display:block; margin-bottom:8px;">💬 대사</strong>
+        <span style="font-size:17px; line-height:1.7; color:#fff;">${dialogue}</span>
+      </div>` : '';
+    playerSection.innerHTML = `<h3>🎬 ${item.name}</h3>
+      <div style="display:flex; gap:20px; align-items:flex-start;">
+        <div style="flex:1; min-width:0;">
+          <video id="videoPlayer" controls src="${url}"></video>
+          <div class="frame-controls">
+            <button class="btn btn-secondary" onclick="stepFrame(-1)">◀ 이전 프레임</button>
+            <button class="btn btn-secondary" onclick="stepFrame(1)">다음 프레임 ▶</button>
+            <span class="time-display" id="timeDisplay">00:00:00.000</span>
+            <span style="color:#555; font-size:12px;">| 일시정지 후 ← → 키로 프레임 이동</span>
+          </div>
+        </div>
+        ${dialogueHtml}
       </div>`;
     const vid = document.getElementById('videoPlayer');
     vid.addEventListener('timeupdate', updateTimeDisplay);
     vid.addEventListener('seeked', updateTimeDisplay);
   } else {
-    playerSection.innerHTML = `<h3>🎵 ${item.name}</h3><audio controls src="${url}"></audio>`;
+    const dialogueHtml = dialogue ? `<div style="margin-top:14px; background:#0f3460; border-radius:10px; padding:14px 18px; border-top:3px solid #e94560; text-align:center; word-break:keep-all;">
+        <strong style="color:#e94560; font-size:12px; display:block; margin-bottom:6px;">🗣️ 대사</strong>
+        <span style="font-size:18px; color:#fff;">${dialogue}</span>
+      </div>` : '';
+    playerSection.innerHTML = `<h3>🎵 ${item.name}</h3><audio controls src="${url}"></audio>${dialogueHtml}`;
   }
 
   const saved = fileResults[key] || {};
@@ -479,11 +515,13 @@ function updateTimeDisplay() {
 }
 
 document.addEventListener('keydown', (e) => {
-  const vid = document.getElementById('videoPlayer');
-  if (!vid) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === ' ') { e.preventDefault(); vid.paused ? vid.play() : vid.pause(); return; }
-  if (!vid.paused) return;
+  const vid = document.getElementById('videoPlayer');
+  const aud = document.querySelector('#playerSection audio');
+  const media = vid || aud;
+  if (!media) return;
+  if (e.key === ' ') { e.preventDefault(); media.paused ? media.play() : media.pause(); return; }
+  if (!vid || !vid.paused) return;
   if (e.key === 'ArrowLeft') { e.preventDefault(); stepFrame(-1); }
   if (e.key === 'ArrowRight') { e.preventDefault(); stepFrame(1); }
 });
